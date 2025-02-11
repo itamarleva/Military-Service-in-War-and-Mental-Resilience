@@ -1,0 +1,495 @@
+---
+title: "Final Project Statistics"
+author: "Itamar Lev Ari, Joshua Kolodny"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    theme: flatly
+    highlight: tango
+    toc: true
+    toc_float: true
+    number_sections: false
+    fig_caption: true
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+options(repos = c(CRAN = "https://cloud.r-project.org"))
+```
+
+## Introduction
+
+This analysis examines the CD-RISC-10-Squared resilience scores among different groups, considering factors such as gender and military service experience during the "Iron Swords War".
+
+## [Question 1 - Sample Statistics]{.underline}
+
+The statistics we chose are mean, SD and Median for each of the 5 groups.
+
+-   Mean is the main sample statistic we analyze, and are used to analyze the differences between groups and to observe overall trends, such as the impact of the role on resilience
+
+-   We used the SD to evaluate how much resilience scores varied within groups, such as men in combat roles or women who didn’t serve. This helped us assess whether the mean alone was a good representation of the group or if there was significant variability.
+
+-   We looked at the median to ensure that our data was not heavily skewed. If the median and mean were very different, it would indicate that outliers were influencing the mean.
+
+## [Question 2 - Descriptive Analysis of The Data]{.underline}
+
+## Data Loading and Preparation
+
+```{r Installing Packages}
+install.packages("kableExtra", type = "binary")
+install.packages("shadowtext", type = "binary")
+```
+
+```{r Data Loading and Preparation}
+# Load necessary library
+library(kableExtra)
+library(ggplot2)
+library(shadowtext)
+
+# Read dataset
+iron_swords_data <- read.csv("C:/Josh/Hebrew University/Year2/intro Statistics/Final_project/Statistics_Final_Project.csv")
+
+# Filter relevant ages (18-30)
+relevant_ages_data <- iron_swords_data[iron_swords_data$age >= 18 & iron_swords_data$age <= 30, ]
+
+# Select relevant columns
+selected_data <- relevant_ages_data[, c(1, 2, 4, 5, 17)]
+# Squared transformation is being introduced to ensure all the data distributed approximatelly normally
+selected_data$CD.RISC.10.SQUARED <- selected_data$CD.RISC.10^2
+```
+
+```{r}
+par(mfrow = c(1, 2))  # 1 row, 2 columns
+
+# QQ-plot for the original data
+qqnorm(selected_data$CD.RISC.10, main = "QQ-Plot (Original Data)")
+qqline(selected_data$CD.RISC.10, col = "red")
+
+# QQ-plot for the squared data
+qqnorm(selected_data$CD.RISC.10.SQUARED, main = "QQ-Plot (Squared Data)")
+qqline(selected_data$CD.RISC.10.SQUARED, col = "red")
+
+# Reset plotting layout
+par(mfrow = c(1, 1))
+```
+
+The plot compares the quantiles of the observed data against the expected quantiles of a normal distribution. If the data is normally distributed, the points should closely follow a straight diagonal line.\
+As we can see, the square transformation is approximately normal, in contrast to the original CD-RISC-10.
+
+## Data Analysis by Group
+
+```{r Analysis by Group}
+# Define group categories
+# Note that did_combat, has "לא" as a response only for Men (Non-Combat) and Women (Non-Combat)
+group_data <- list(
+  "Men (Not Served)" = selected_data[selected_data$gender == "זכר" & selected_data$did_serve == "לא", ]$CD.RISC.10.SQUARED,
+  "Men (Combat)" = selected_data[selected_data$gender == "זכר" & selected_data$did_combat == "כן", ]$CD.RISC.10.SQUARED,
+  "Men (Non-Combat)" = selected_data[selected_data$gender == "זכר" & selected_data$did_combat == "לא", ]$CD.RISC.10.SQUARED,
+  "Women (Served)" = selected_data[selected_data$gender == "נקבה" & selected_data$did_serve == "כן", ]$CD.RISC.10.SQUARED,
+  "Women (Not Served)" = selected_data[selected_data$gender == "נקבה" & selected_data$did_serve == "לא", ]$CD.RISC.10.SQUARED
+)
+
+# Extract necessary data vectors for t-tests
+men_served_data <- selected_data[selected_data$gender == "זכר" & selected_data$did_serve == "כן", ]$CD.RISC.10.SQUARED
+men_not_served_data <- selected_data[selected_data$gender == "זכר" & selected_data$did_serve == "לא", ]$CD.RISC.10.SQUARED
+women_served_data <- selected_data[selected_data$gender == "נקבה" & selected_data$did_serve == "כן", ]$CD.RISC.10.SQUARED
+women_not_served_data <- selected_data[selected_data$gender == "נקבה" & selected_data$did_serve == "לא", ]$CD.RISC.10.SQUARED
+men_combat_data <- selected_data[selected_data$gender == "זכר" & selected_data$did_combat == "כן", ]$CD.RISC.10.SQUARED
+men_non_combat_data <- selected_data[selected_data$gender == "זכר" & selected_data$did_combat == "לא", ]$CD.RISC.10.SQUARED
+
+# Function to calculate mean, median, and standard deviation
+calculate_stats <- function(data) {
+  return(data.frame(
+    Mean = mean(data, na.rm = TRUE),
+    Median = median(data, na.rm = TRUE),
+    SD = sd(data, na.rm = TRUE),
+    Group_Size = length(data)
+  ))
+}
+
+# Compute statistics for each group and round to 3 decimal places
+stats_results <- do.call(rbind, lapply(group_data, calculate_stats))
+stats_results <- round(stats_results, 3)
+
+# Display descriptive statistics in a well-formatted table
+knitr::kable(stats_results, caption = "Descriptive Statistics of CD-RISC-10-Squared Scores by Group", align = 'c') %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"),
+                full_width = FALSE, position = "center") %>%
+  column_spec(1, bold = TRUE, width = "3cm") %>%
+  column_spec(2:4, width = "2cm") %>%
+  row_spec(0, bold = TRUE, color = "white", background = "#1D3557")
+```
+
+## Visualization: Boxplot of Resilience Scores
+
+```{r Resilience Scores}
+# Prepare data for plotting
+selected_data$group <- factor(
+  ifelse(selected_data$gender == "זכר" & selected_data$did_serve == "לא", "Men (Not Served)",
+         ifelse(selected_data$gender == "זכר" & selected_data$did_combat == "כן", "Men (Combat)",
+                ifelse(selected_data$gender == "זכר" & selected_data$did_combat == "לא", "Men (Non-Combat)",
+                       ifelse(selected_data$gender == "נקבה" & selected_data$did_serve == "כן", "Women (Served)", "Women (Not Served)"))))
+)
+
+# Boxplot visualization
+ggplot(selected_data, aes(x = group, y = CD.RISC.10.SQUARED, fill = group)) +
+  geom_boxplot() +
+  labs(title = "Boxplot of CD-RISC-10-Squared Scores by Group", x = "Group", y = "CD-RISC-10-Squared Score") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 0, hjust = 0.5, size = 6, face = "bold"))
+```
+
+## Confidence Interval Calculation
+
+```{r CI Calc}
+# Function to calculate 95% Confidence Interval using t-distribution
+calculate_CI_95 <- function(data) {
+  mean_val <- mean(data)
+  stderr <- sd(data) / sqrt(length(data))
+  margin <- qt(0.975, df = length(data) - 1) * stderr
+  return(c(mean = mean_val, lower = mean_val - margin, upper = mean_val + margin))
+}
+
+# Compute CI for each group
+group_CI <- do.call(rbind, lapply(names(group_data), function(group) {
+  stats <- calculate_CI_95(group_data[[group]])
+  data.frame(group = group, mean = stats["mean"], lower = stats["lower"], upper = stats["upper"])
+}))
+
+ggplot(group_CI, aes(x = group, y = mean, fill = group)) +
+    geom_bar(stat = "identity", color = "black", width = 0.5) +  # Bars for means
+    geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2, size = 1) +  # Error bars for CI
+    geom_point(size = 3, color = "darkgreen") +  # Emphasize mean values
+
+    # Shadowed Mean Text
+    geom_shadowtext(aes(label = paste(round(mean, 1))), 
+                    hjust = -0.3, vjust = 0.5, size = 4, 
+                    fontface = "bold", color = "yellow", 
+                    bg.color = "black", bg.r = 0.15) +  # Black outline
+    
+    # Shadowed Lower Bound Text
+    geom_shadowtext(aes(y = lower, label = paste("Lower:", round(lower, 1))), 
+                    vjust = 1.5, size = 4, fontface = "bold", 
+                    color = "black", bg.color = "white", bg.r = 0.1) +  # White outline
+
+    # Shadowed Upper Bound Text
+    geom_shadowtext(aes(y = upper, label = paste("Upper:", round(upper, 1))), 
+                    vjust = -1.5, size = 4, fontface = "bold", 
+                    color = "black", bg.color = "white", bg.r = 0.1) +  # White outline
+
+    labs(title = "Average CD-RISC-10-Squared Score with 95% Confidence Interval",
+         x = "Group",
+         y = "Mean CD-RISC-10-Squared Score") +
+    theme_minimal() +
+    
+    # Brighter colors
+    scale_fill_manual(values = c("#FF6B6B", "#FFA07A", "#76D7C4", "#74B9FF", "#A29BFE")) +
+    
+    # Reduce bar height display to 80%
+    scale_y_continuous(expand = expansion(mult = c(0, 0.2))) +  
+
+    # Theme adjustments
+    theme(axis.text.x = element_text(angle = 0, hjust = 0.5, size = 8, face = "bold"),
+          axis.title = element_text(size = 14, face = "bold"),
+          plot.title = element_text(size = 16, face = "bold", hjust = 0.5),
+          legend.position = "none")  # Hide legend for cleaner look
+```
+
+## Correlation Between Age and Resilience Score
+
+```{r Correlation age and res score}
+cor_test <- cor.test(selected_data$age, selected_data$CD.RISC.10.SQUARED)
+# Extract correlation coefficient and p-value
+  r <- cor_test$estimate  # Correlation coefficient
+  p_value <- cor_test$p.value  # P-value for statistical significance
+# Print correlation results
+  cat("Pearson Correlation Coefficient (r):", round(r, 3), "\n")
+  cat("P-value:", round(p_value, 5), "\n")
+```
+
+```{r Significance correlation test}
+if (p_value < 0.05) {
+    cat("Correlation is significant, proceeding with regression...\n")
+    
+    # Perform linear regression: CD-RISC-10 ~ Age
+    age_regression_model <- lm(CD.RISC.10.SQUARED ~ age, data = selected_data)
+    
+    # Extract coefficients
+    a <- coef(age_regression_model)[2]  # Slope (Rate of change per age unit)
+    b <- coef(age_regression_model)[1]  # Intercept (CD-RISC-10 score when age = 0)
+    
+    # Print regression coefficients
+    cat("Slope (a):", round(a, 3), "\n")  # שיפוע
+    cat("Intercept (b):", round(b, 3), "\n")  # חיתוך עם ציר y
+    
+    # Scatter plot with regression line
+    ggplot(relevant_ages_data, aes(x = age, y = CD.RISC.10.SQUARED)) +
+      geom_point(alpha = 0.5, color = "#1D3557") +  # Scatter plot points
+      geom_smooth(method = "lm", color = "#E63946", se = TRUE) +  # Regression line with confidence interval
+      labs(title = "Age vs. CD-RISC-10-Squared Score Regression",
+           x = "Age",
+           y = "CD-RISC-10-Squared Score") +
+      theme_minimal() +
+      theme(axis.text = element_text(size = 12, face = "bold"),
+            axis.title = element_text(size = 14, face = "bold"),
+            plot.title = element_text(size = 16, face = "bold", hjust = 0.5))
+    
+  } else {
+    cat("No significant correlation detected (p =", round(p_value, 5), "), skipping regression.\n")
+  }
+```
+
+## Hypothesis Testing: Difference of Means Between Groups
+
+This section conducts **t-tests** to compare the mean CD-RISC-10-Squared resilience scores across different groups based on their military service status.
+
+### **Hypotheses**
+
+-   **H₀ (Null Hypothesis)**: People who served have an equal CD-RISC-10-Squared score to those who did not serve.
+-   **H₁ (Alternative Hypothesis)**: People who served have a higher CD-RISC-10-Squared score than those who did not serve.
+-   **Significance Level (α)**: 0.05
+
+```{r t- tests}
+# Perform t-tests
+
+# Men who served vs. Men who didn't serve
+t_test_men_served <- t.test(
+  men_served_data,
+  men_not_served_data,
+  alternative = "greater",  # One-tailed test (H1: Served > Not Served)
+  var.equal = FALSE  # Assume unequal variances (Welch’s t-test)
+)
+
+# Women who served vs. Women who didn't serve
+t_test_women_served <- t.test(
+  women_served_data,
+  women_not_served_data,
+  alternative = "greater",  # One-tailed test (H1: Served > Not Served)
+  var.equal = FALSE  # Assume unequal variances
+)
+
+# Men who did combat vs. Men who did non-combat
+t_test_men_combat <- t.test(
+  men_combat_data,
+  men_non_combat_data,
+  alternative = "greater",  # One-tailed test (H1: Combat > Non-combat)
+  var.equal = FALSE  # Assume unequal variances
+)
+```
+
+### **Results**
+
+```{r t-tests results}
+# Display results in a structured format
+results <- data.frame(
+  Comparison = c("Men Served vs. Men Not Served", "Women Served vs. Women Not Served", "Men Combat vs. Men Non-Combat"),
+  T_Statistic = c(round(t_test_men_served$statistic, 3), round(t_test_women_served$statistic, 3), round(t_test_men_combat$statistic, 3)),
+  P_Value = c(round(t_test_men_served$p.value, 5), round(t_test_women_served$p.value, 5), round(t_test_men_combat$p.value, 5))
+)
+
+# Display formatted table using kableExtra
+knitr::kable(results, caption = "T-Test Results for CD-RISC-10-Squared Scores", align = 'c') %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"),
+                full_width = FALSE, position = "center") %>%
+  column_spec(1, bold = TRUE, width = "5cm") %>%
+  column_spec(2:3, width = "3cm") %>%
+  row_spec(0, bold = TRUE, color = "white", background = "#1D3557")
+```
+
+### **Interpretation**
+
+```{r Interpretation}
+# Interpret the results
+interpretation <- c(
+  if (t_test_men_served$p.value < 0.05) "Reject H0: Men who served have significantly higher resilience." else "Fail to reject H0: No significant difference in resilience.",
+  if (t_test_women_served$p.value < 0.05) "Reject H0: Women who served have significantly higher resilience." else "Fail to reject H0: No significant difference in resilience.",
+  if (t_test_men_combat$p.value < 0.05) "Reject H0: Men who did combat have significantly higher resilience." else "Fail to reject H0: No significant difference in resilience."
+)
+
+interpretation_table <- data.frame(Comparison = results$Comparison, Interpretation = interpretation)
+knitr::kable(interpretation_table, caption = "Interpretation of T-Test Results") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"),
+                full_width = FALSE, position = "center") %>%
+  column_spec(1, bold = TRUE, width = "5cm") %>%
+  column_spec(2, width = "8cm") %>%
+  row_spec(0, bold = TRUE, color = "white", background = "#1D3557")
+```
+
+# Conclusions
+
+## [Question 3 - Research Results and Conclusions]{.underline}
+
+### Correlation Between Age and Resilience
+
+#### Result:
+
+-   Pearson correlation coefficient r=0.09 with p=0.2460.
+
+-   This indicates no significant correlation between age and resilience (CD-RISC-10-Squared scores) within the 18–30 age group.
+
+#### Learning:
+
+Resilience in this age range is not strongly linked to age. Other factors, such as military service, may have a more substantial impact on resilience scores.
+
+### Men Who Served vs. Men Who Didn’t Serve
+
+#### Result:
+
+-   t-statistic = 4.556, p-value = 0.00003
+
+-   Men who served in the military during the war, have significantly higher resilience scores than men who didn’t serve.
+
+#### Learning:
+
+Military service during war, appears to positively influence resilience in men, potentially due to the structured environment, exposure to challenging situations, and teamwork that foster adaptability and coping mechanisms.
+
+### Women Who Served vs. Women Who Didn’t Serve
+
+#### Result:
+
+-   t-statistic = 3.075, p-value = 0.00163.
+
+-   Women who served in the military during the war, also have significantly higher resilience scores than women who didn’t serve.
+
+#### Learning:
+
+Similar to men, military service during the war, enhances resilience in women. However, the lower t-statistic compared to men suggests that the effect size might be smaller for women.
+
+### Men in Combat Roles vs. Non-Combat Roles
+
+#### Result:
+
+-   t-statistic = 0.013, p-value = 0.49500.
+
+-   No significant difference in resilience scores between men who served in combat roles during the war, and those who served in non-combat roles.
+
+#### Learning:
+
+The type of role within military service (combat vs. non-combat) does not appear to influence resilience. This suggests that the general military experience during the war, rather than specific exposure to combat, plays a more significant role in developing resilience.
+
+## Key Takeaways:
+
+#### Military Service During The War Positively Impacts Resilience:
+
+Both men and women who served show higher resilience compared to their non-serving counterparts. This highlights the value of structured environments and exposure to challenges in building psychological strength.
+
+#### Gender Differences:
+
+While the impact of service on resilience is significant for both genders, the effect might be slightly stronger for men than women, possibly due to differences in roles, experiences, or societal expectations.
+
+#### Role Type Matters Less:
+
+Combat versus non-combat roles do not significantly affect resilience, indicating that resilience-building is more about the general military experience during the war, than specific job roles.
+
+#### Age is Not a Factor:
+
+Within the 18–30 age group, resilience does not correlate significantly with age. This suggests that other life experiences or situational factors like military service during the war are more critical in shaping resilience during this phase of life.
+
+## [Question 4 - Strengths and Weaknesses of Our Research]{.underline}
+
+### Strengths
+
+#### Homogeneous Population:
+
+One of the key strengths of the study is the focus on a relatively homogeneous population—survey participants who graduated from the same school, around the same years. This minimizes the influence of confounding variables such as socioeconomic differences, educational background, or cultural diversity, ensuring that observed differences in resilience are more likely attributable to military service.
+
+#### Clear Group Definitions:
+
+The data-set allowed for clear separation of groups (e.g., men vs. women, served vs. not served, combat vs. non-combat). This clarity enables precise comparisons and straightforward statistical analysis.
+
+#### Robust Statistical Analysis:
+
+The use of advanced statistical techniques, including t-tests with adjustments for unequal sample sizes (Welch’s t-test), which we expanded horizons and studied about for the project, and confidence intervals, strengthens the reliability of the results. The decision to skip regression due to a non-significant correlation is a responsible approach, avoiding over interpretation of the data.
+
+#### Focus on Key Variables:
+
+The study focuses on resilience (CD-RISC-10-Squared scores) as the primary outcome, which is a well-established and validated measure of psychological resilience. This ensures the findings are grounded in a widely recognized framework.
+
+#### Gender-Specific Insights:
+
+By analyzing men and women separately, the study highlights gender-specific differences in the impact of military service on resilience. This granularity adds depth to the findings and allows for targeted implications.
+
+### Weaknesses
+
+#### Response Bias:
+
+As participation in the survey was voluntary, there is a potential for response bias. Individuals who chose to respond may differ systematically from those who didn’t, potentially skewing the results. For example, more resilient individuals or those with strong opinions about their military experience may have been more likely to participate. We tried to minimize this bias by encouraging everyone to fill the survey and by sending notifications to people who didn't yet answer.
+
+#### Small Sample Sizes for Some Groups:
+
+Some groups, such as women who didn't serve or men who didn't serve, may have relatively small sample sizes, reducing the statistical power of the analysis. Small groups increase the margin of error and make it harder to detect subtle differences. We performed squared transformation to ensure even the small groups distributed approximately normal.
+
+#### Pre-Existing Differences in Military Participation:
+
+Individuals who choose to serve in the military and those who do not may differ in significant ways before their service. For example, those who serve might already have higher resilience, motivation, or physical fitness, which could confound the results. Similarly, those assigned to combat roles versus non-combat roles might differ in psychological traits or other factors that influence resilience.
+
+#### Limited Contextual Information:
+
+The study does not account for other factors that could influence resilience, such as family support, educational attainment, or pre-existing mental health conditions. These unmeasured variables could contribute to resilience differences observed between groups.
+
+#### Geographical and Cultural Limitations:
+
+The findings are based on individuals from a specific school, located in a specific geographical area. This limits the generality of the results to other populations with different cultural, economic, or educational backgrounds.
+
+## [Question 5 - Implications of the Results]{.underline}
+
+### 1. Military Service as a Factor in Resilience Building
+
+#### Key Findings:
+
+Both men and women who served in the military during the war demonstrated significantly higher resilience (CD-RISC-10 scores) compared to those who did not serve.
+
+#### Implications:
+
+-   This suggests that military service in extreme times like war provides experiences and challenges that foster resilience, such as structured routines, teamwork, exposure to adversity, and personal growth opportunities.
+
+-   Programs that emulate similar resilience-building environments (e.g., structured training, group challenges) could benefit individuals outside of the military, such as young adults in other settings.
+
+### 2. Combat Roles vs. Non-Combat Roles
+
+#### Key Findings:
+
+No significant difference in resilience was observed between men in combat and non-combat roles.
+
+#### Implications:
+
+-   Resilience appears to be influenced more by the overall military experience during a war rather than specific roles. This finding emphasizes the universal benefits of military service during a war, rather than role-specific effects.
+
+-   Further research could explore whether different types of training, extreme experiences or leadership opportunities contribute equally across roles to resilience development.
+
+## Ideas for Future Research and Initiatives
+
+### Perform Similar Test for Different Population Types
+
+-   Perform similar experiments in different schools, regions, and socioeconomic backgrounds to assess whether the findings hold true in other population types.
+
+-   **Objective**: Increase generality of population and understand how other factors influence resilience.
+
+### 1. Explore Pre-Service Characteristics
+
+-   Collect data on participants' resilience, mental health, and personality traits before military service.
+
+-   **Objective**: Distinguish between the effects of military service and pre-existing individual differences in resilience.
+
+### 2. Investigate Other Influencing Factors
+
+Include variables such as:
+
+-   Family background (e.g., parental support, siblings in the military).
+
+-   Educational attainment before service.
+
+-   Mental health history.
+
+**Objective**: Develop a more comprehensive understanding of what influences resilience.
+
+### 3. Focus on Civilian Applications
+
+Investigate how the resilience-building aspects of military service can be adapted to civilian programs, such as:
+
+-   Leadership training for young adults.
+
+-   Structured challenges in community or educational settings.
+
+**Objective**: Leverage insights from military extreme experiences to benefit broader populations.
