@@ -1,5 +1,5 @@
 **Project Overview:**
-This project explores how different factors—such as gender, military service status, and role (combat vs. non-combat)—affect psychological resilience. The main components of the analysis include:
+This project explores how military service status, and role (combat vs. non-combat)—affect psychological resilience. The main components of the analysis include:
 
 Descriptive Statistics: Calculating mean, median, standard deviation, and group size for each subgroup.
 Data Visualization: Creating QQ-plots, boxplots, and bar plots with confidence intervals to illustrate the distribution of resilience scores.
