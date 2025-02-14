@@ -1,0 +1,6 @@
+# Treat all .R and .Rmd files as R
+*.R linguist-language=R
+*.Rmd linguist-language=R
+
+# Treat .html files as documentation (so they don't dominate the language stats)
+*.html linguist-documentation
